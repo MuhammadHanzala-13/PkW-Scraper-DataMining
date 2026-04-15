@@ -1,0 +1,88 @@
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+import time
+import random
+import os
+
+INPUT_FILE = "data/pakwheels_cars_raw.csv"
+OUTPUT_FILE = "data/pakwheels_cars_raw.csv" # Overwrite to keep it continuous
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36"
+}
+
+def enrich_data():
+    if not os.path.exists(INPUT_FILE):
+        print(f"File not found: {INPUT_FILE}")
+        return
+
+    df = pd.read_csv(INPUT_FILE)
+
+    # Add columns if they don't exist
+    if 'body_type' not in df.columns:
+        df['body_type'] = None
+    if 'assembly' not in df.columns:
+        df['assembly'] = None
+
+    print(f"Loaded {len(df)} cars. Starting deep enrichment...")
+    
+    # We only process cars that haven't been enriched yet
+    missing_mask = df['body_type'].isna()
+    indices_to_enrich = df[missing_mask].index.tolist()
+
+    print(f"Cars remaining to enrich: {len(indices_to_enrich)}")
+
+    if len(indices_to_enrich) == 0:
+        print("All cars already have Body Type and Assembly!")
+        return
+
+    save_counter = 0
+    
+    try:
+        for idx in indices_to_enrich:
+            url = df.loc[idx, 'url']
+            print(f"  [{len(indices_to_enrich) - save_counter} remaining] Extracting: {df.loc[idx, 'title']}")
+            
+            try:
+                # Polite delay to prevent IP Ban
+                time.sleep(random.uniform(1.2, 2.8))
+                
+                response = requests.get(url, headers=HEADERS, timeout=15)
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, "lxml")
+                    
+                    # Parse the detail table
+                    table = soup.find('table', class_='table table-bordered text-center table-engine-detail')
+                    if table:
+                        for td in table.find_all('td'):
+                            parts = td.text.strip().split('\n')
+                            if len(parts) >= 2:
+                                val = parts[0].strip()
+                                key = parts[-1].strip().replace(" ", "_").lower()
+                                
+                                # Update DataFrame
+                                if key == "body_type":
+                                    df.at[idx, 'body_type'] = val
+                                elif key == "assembly":
+                                    df.at[idx, 'assembly'] = val
+            except Exception as e:
+                print(f"    [Error] Failed to fetch {url}: {e}")
+
+            save_counter += 1
+            
+            # Save every 20 cars so you don't lose data if IP gets blocked!
+            if save_counter % 20 == 0:
+                df.to_csv(OUTPUT_FILE, index=False)
+                print("  [CHECKPOINT] Progress saved to CSV.")
+
+    except KeyboardInterrupt:
+        print("\n[STOPPED] You paused the script. Saving current progress...")
+        
+    finally:
+        # Final save
+        df.to_csv(OUTPUT_FILE, index=False)
+        print("  [SAVED] Task complete or interrupted safely.")
+
+if __name__ == "__main__":
+    enrich_data()

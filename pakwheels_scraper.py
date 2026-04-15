@@ -104,4 +104,4 @@ def scrape(total_pages=50):
     print("=" * 60)
 
 if __name__ == "__main__":
-    scrape(total_pages=100) # Grabs approx 3000 cars!
+    scrape(total_pages=250) # Grabs approx 3000 cars!

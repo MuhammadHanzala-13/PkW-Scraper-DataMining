@@ -2,6 +2,7 @@
 PakWheels Cars - Data Engineering Pipeline
 Input:  data/pakwheels_cars_raw.csv    (raw scraped data)
 Output: data/pakwheels_cars_processed.csv (clean, feature-engineered data for modeling)
+
 """
 
 import pandas as pd
@@ -91,7 +92,7 @@ def engineer_features(df):
     return df
 
 def encode_categoricals(df):
-    for col in ["fuel_type", "transmission", "city"]:
+    for col in ["fuel_type", "transmission", "city", "body_type", "assembly"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().str.capitalize()
             df[f"{col}_encoded"] = pd.Categorical(df[col]).codes
