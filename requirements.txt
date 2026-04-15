@@ -4,3 +4,7 @@ lxml
 pandas
 numpy
 playwright
+streamlit 
+plotly 
+seaborn
+matplotlib

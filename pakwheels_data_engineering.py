@@ -88,11 +88,17 @@ def engineer_features(df):
         df["mileage_per_year"] = df["mileage_km"] / (df["car_age"] + 1)
     if "mileage_km" in df.columns:
         df["is_high_mileage"] = (df["mileage_km"] > 150_000).astype(int)
-    print("[ENGINEER] Calculated age, logarithmic price, and mileage rates.")
+    
+    # Feature engineering for newly added features list
+    if "features" in df.columns:
+        df["features"] = df["features"].fillna("")
+        df["feature_count"] = df["features"].apply(lambda x: len(x.split(',')) if len(x.strip()) > 0 else 0)
+
+    print("[ENGINEER] Calculated age, logarithmic price, mileage rates, and feature count.")
     return df
 
 def encode_categoricals(df):
-    for col in ["fuel_type", "transmission", "city", "body_type", "assembly"]:
+    for col in ["fuel_type", "transmission", "city", "body_type", "assembly", "exterior_color", "registered_city"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().str.capitalize()
             df[f"{col}_encoded"] = pd.Categorical(df[col]).codes

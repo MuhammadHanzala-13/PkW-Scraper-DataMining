@@ -6,7 +6,7 @@ import random
 import os
 
 INPUT_FILE = "data/pakwheels_cars_raw.csv"
-OUTPUT_FILE = "data/pakwheels_cars_raw.csv" # Overwrite to keep it continuous
+OUTPUT_FILE = "data/pakwheels_cars_raw.csv"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36"
@@ -19,22 +19,27 @@ def enrich_data():
 
     df = pd.read_csv(INPUT_FILE)
 
-    # Add columns if they don't exist
-    if 'body_type' not in df.columns:
-        df['body_type'] = None
-    if 'assembly' not in df.columns:
-        df['assembly'] = None
+    if 'enrich_status' not in df.columns: df['enrich_status'] = "Pending"
+    if 'body_type' not in df.columns: df['body_type'] = "Unknown"
+    if 'assembly' not in df.columns: df['assembly'] = "Unknown"
+    if 'exterior_color' not in df.columns: df['exterior_color'] = "Unknown"
+    if 'registered_city' not in df.columns: df['registered_city'] = "Unknown"
+    if 'features' not in df.columns: df['features'] = ""
+
+    # Respect previously enriched data before the new column existed
+    already_done_mask = df['body_type'].notna() & (df['body_type'] != "Unknown")
+    df.loc[already_done_mask, 'enrich_status'] = "Done"
 
     print(f"Loaded {len(df)} cars. Starting deep enrichment...")
     
-    # We only process cars that haven't been enriched yet
-    missing_mask = df['body_type'].isna()
+    # We only process cars that are 'Pending'
+    missing_mask = df['enrich_status'] != "Done"
     indices_to_enrich = df[missing_mask].index.tolist()
 
     print(f"Cars remaining to enrich: {len(indices_to_enrich)}")
 
     if len(indices_to_enrich) == 0:
-        print("All cars already have Body Type and Assembly!")
+        print("All cars are already enriched! You are good to go.")
         return
 
     save_counter = 0
@@ -46,7 +51,7 @@ def enrich_data():
             
             try:
                 # Polite delay to prevent IP Ban
-                time.sleep(random.uniform(1.2, 2.8))
+                time.sleep(random.uniform(1.0, 2.5))
                 
                 response = requests.get(url, headers=HEADERS, timeout=15)
                 if response.status_code == 200:
@@ -61,26 +66,36 @@ def enrich_data():
                                 val = parts[0].strip()
                                 key = parts[-1].strip().replace(" ", "_").lower()
                                 
-                                # Update DataFrame
-                                if key == "body_type":
-                                    df.at[idx, 'body_type'] = val
-                                elif key == "assembly":
-                                    df.at[idx, 'assembly'] = val
+                                # Update DataFrame where found (overriding 'Unknown')
+                                if key == "body_type": df.at[idx, 'body_type'] = val
+                                elif key == "assembly": df.at[idx, 'assembly'] = val
+                                elif key == "exterior_color": df.at[idx, 'exterior_color'] = val
+                                elif key == "registered_city": df.at[idx, 'registered_city'] = val
+                                
+                    # Extract the features list (Airbags, ABS, Sunroof etc.)
+                    feature_ul = soup.find('ul', id='scroll_car_feature')
+                    if feature_ul:
+                        feature_items = [li.text.strip() for li in feature_ul.find_all('li')]
+                        df.at[idx, 'features'] = ", ".join(feature_items)
+                        
+                    # Mark as successfully visited
+                    df.at[idx, 'enrich_status'] = "Done"
+                    
             except Exception as e:
                 print(f"    [Error] Failed to fetch {url}: {e}")
+                # We do NOT mark as "Done" so it can retry later
 
             save_counter += 1
             
-            # Save every 20 cars so you don't lose data if IP gets blocked!
+            # Save every 20 cars so you don't lose data
             if save_counter % 20 == 0:
                 df.to_csv(OUTPUT_FILE, index=False)
-                print("  [CHECKPOINT] Progress saved to CSV.")
+                print("  [CHECKPOINT] Progress safely saved to csv.")
 
     except KeyboardInterrupt:
         print("\n[STOPPED] You paused the script. Saving current progress...")
         
     finally:
-        # Final save
         df.to_csv(OUTPUT_FILE, index=False)
         print("  [SAVED] Task complete or interrupted safely.")
 
