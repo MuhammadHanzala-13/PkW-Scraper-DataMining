@@ -196,3 +196,94 @@ st.markdown("---")
 st.header("6. Processed Dataset Inspector")
 st.markdown(f"Showing the first 100 rows of the **{len(df):,}** fully cleaned and engineered records ready for the ANN model.")
 st.dataframe(df.head(100), use_container_width=True)
+
+st.markdown("---")
+
+# --- 7. ML Price Estimator ---
+st.header("7. AI Price Estimator (Random Forest)")
+st.markdown("Enter car details below to get an estimated fair market value.")
+
+import joblib
+
+MODEL_PATH = "car_price_model.pkl"
+if os.path.exists(MODEL_PATH):
+    model = joblib.load(MODEL_PATH)
+    
+    # We need mappings from strings to encoded integers based on the processed dataframe
+    # To do this, we can extract dictionaries from df
+    features = list(model.feature_names_in_) # This gives exactly what the model expects
+    
+    st.markdown("### Vehicle Specifications")
+    col_e1, col_e2, col_e3 = st.columns(3)
+    
+    # Dynamically build dropdowns based on available mappings
+    input_data = {}
+    
+    with col_e1:
+        if 'brand_encoded' in features and 'brand_clean' in df.columns:
+            brand_map = dict(zip(df['brand_clean'], df['brand_encoded']))
+            selected_brand = st.selectbox("Brand", options=list(brand_map.keys()))
+            input_data['brand_encoded'] = brand_map[selected_brand]
+            
+        if 'body_type_encoded' in features and 'body_type' in df.columns:
+            bt_map = dict(zip(df['body_type'], df['body_type_encoded']))
+            selected_bt = st.selectbox("Body Type", options=list(bt_map.keys()))
+            input_data['body_type_encoded'] = bt_map[selected_bt]
+            
+    with col_e2:
+        if 'model_encoded' in features and 'model_clean' in df.columns:
+            model_map = dict(zip(df['model_clean'], df['model_encoded']))
+            selected_model = st.selectbox("Model", options=list(model_map.keys()))
+            input_data['model_encoded'] = model_map[selected_model]
+            
+        if 'assembly_encoded' in features and 'assembly' in df.columns:
+            asm_map = dict(zip(df['assembly'], df['assembly_encoded']))
+            selected_asm = st.selectbox("Assembly", options=list(asm_map.keys()))
+            input_data['assembly_encoded'] = asm_map[selected_asm]
+            
+    with col_e3:
+        if 'registered_city_encoded' in features and 'registered_city' in df.columns:
+            city_map = dict(zip(df['registered_city'], df['registered_city_encoded']))
+            selected_city = st.selectbox("Registered City", options=list(city_map.keys()))
+            input_data['registered_city_encoded'] = city_map[selected_city]
+            
+        if 'exterior_color_encoded' in features and 'exterior_color' in df.columns:
+            col_map = dict(zip(df['exterior_color'], df['exterior_color_encoded']))
+            selected_color = st.selectbox("Exterior Color", options=list(col_map.keys()))
+            input_data['exterior_color_encoded'] = col_map[selected_color]
+
+    # Handle numeric features
+    st.markdown("### Numeric Features")
+    col_n1, col_n2 = st.columns(2)
+    with col_n1:
+        if 'feature_count' in features:
+            input_data['feature_count'] = st.number_input("Feature Count (Extra features like ABS, Sunroof, etc.)", min_value=0, max_value=50, value=5)
+            
+        if 'year' in features:
+            input_data['year'] = st.number_input("Manufacturing Year", min_value=1980, max_value=2024, value=2018)
+            
+        if 'car_age' in features:
+             if 'year' in input_data:
+                 input_data['car_age'] = 2024 - input_data['year']
+             else:
+                 input_data['car_age'] = st.number_input("Car Age", min_value=0, max_value=50, value=5)
+    
+    with col_n2:
+        if 'mileage_km' in features:
+            input_data['mileage_km'] = st.number_input("Mileage (km)", min_value=0, max_value=500000, value=50000)
+            
+        if 'engine_cc' in features:
+            input_data['engine_cc'] = st.number_input("Engine CC", min_value=600, max_value=5000, value=1300)
+
+    # Make Prediction Button
+    st.markdown("---")
+    if st.button("Calculate Estimated Price", type="primary"):
+        input_df = pd.DataFrame([input_data])[features] # Ensure order exactly matches training data
+        try:
+            pred_price = model.predict(input_df)[0]
+            st.success(f"### Estimated Market Value: **PKR {pred_price:,.0f}**")
+        except Exception as e:
+            st.error(f"Prediction failed. Missing data or Error: {e}")
+            
+else:
+    st.info("💡 To enable the AI Price Estimator, place your trained `car_price_model.pkl` in the same directory as this dashboard.")

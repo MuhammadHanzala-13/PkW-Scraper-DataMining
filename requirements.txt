@@ -8,3 +8,4 @@ streamlit
 plotly 
 seaborn
 matplotlib
+joblib

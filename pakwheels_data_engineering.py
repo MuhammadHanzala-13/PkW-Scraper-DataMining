@@ -54,11 +54,40 @@ def clean_types(df):
     if "year" in df.columns:
         df["year"] = pd.to_numeric(df["year"], errors="coerce")
         
-    # 5. Make/Brand: Extract from title
-    if "title" in df.columns:
-        df["brand"] = df["title"].apply(lambda x: str(x).split(' ')[0] if pd.notna(x) else "Unknown")
+    # 5. Make/Brand and Model: Extract from title
+    def extract_brand_model(title):
+        title = str(title)
+        if pd.isna(title) or not title.strip():
+            return pd.Series(["Unknown", "Unknown"])
+            
+        words = title.split()
+        if not words:
+            return pd.Series(["Unknown", "Unknown"])
+            
+        brand = words[0]
         
-    print(f"[CLEAN] Data types cleaned and scaled.")
+        # Find the year to determine where the model name ends
+        year_idx = -1
+        for i, word in enumerate(words):
+            # Look for a 4-digit number representing a year
+            if i > 0 and re.match(r'^(19|20)\d{2}$', word):
+                year_idx = i
+                break
+                
+        if year_idx > 1:
+            model = " ".join(words[1:year_idx])
+        elif len(words) > 1:
+            # If no year found, just take the second word as model as a fallback
+            model = words[1]
+        else:
+            model = "Unknown"
+            
+        return pd.Series([brand, model])
+
+    if "title" in df.columns:
+        df[["brand", "model"]] = df["title"].apply(extract_brand_model)
+        
+    print("[CLEAN] Data types cleaned. Extracted Brand and Model from title.")
     return df
 
 def handle_missing_values(df):
@@ -128,10 +157,16 @@ def encode_categoricals(df):
             df[f"{col}_encoded"] = pd.Categorical(df[col]).codes
     
     if "brand" in df.columns:
-        top = df["brand"].value_counts().nlargest(10).index
-        df["brand_clean"] = df["brand"].where(df["brand"].isin(top), other="Other")
+        top_brands = df["brand"].value_counts().nlargest(15).index
+        df["brand_clean"] = df["brand"].where(df["brand"].isin(top_brands), other="Other")
+        df["brand_encoded"] = pd.Categorical(df["brand_clean"]).codes
         
-    print("[ENCODE] Encoded categorical features.")
+    if "model" in df.columns:
+        top_models = df["model"].value_counts().nlargest(40).index
+        df["model_clean"] = df["model"].where(df["model"].isin(top_models), other="Other")
+        df["model_encoded"] = pd.Categorical(df["model_clean"]).codes
+        
+    print("[ENCODE] Encoded categorical features, brand, and model.")
     return df
 
 def run_pipeline():
